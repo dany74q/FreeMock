@@ -6,10 +6,7 @@
 namespace freemock {
 	template <typename Func1, typename Func2>
 	struct FreeMocker {
-		using Func1Decayed = std::decay_t<Func1>;
-		using Func2Decayed = std::decay_t<Func2>;
-
-		FreeMocker(Func1Decayed f1, Func2Decayed f2) : f1_{ f1 }, f2_{ f2 } {
+		FreeMocker(Func1 f1, Func2 f2) : f1_{ f1 }, f2_{ f2 } {
 			mock();
 		}
 		~FreeMocker() noexcept {
@@ -50,7 +47,7 @@ namespace freemock {
 			if (*reinterpret_cast<unsigned char*>(f1_) == 0xe9) {
 				auto relativeJump = *reinterpret_cast<unsigned*>(reinterpret_cast<unsigned char*>(f1_) + 1);
 				auto finalAddress = reinterpret_cast<int>(f1_) + relativeJump + 5;
-				f1_ = *reinterpret_cast<Func1Decayed*>(&finalAddress);
+				f1_ = *reinterpret_cast<Func1*>(&finalAddress);
 			}
 		}
 
@@ -73,8 +70,8 @@ namespace freemock {
 			*(reinterpret_cast<unsigned short*>(reinterpret_cast<unsigned char*>(f1_) + 5)) = 0xe0ff;
 		}
 	private:
-		mutable Func1Decayed f1_;
-		Func2Decayed f2_;
+		mutable Func1 f1_;
+		Func2 f2_;
 		mutable DWORD dwOldProtect_ = PAGE_EXECUTE_READ;
 		mutable DWORD dwNewProtect_ = PAGE_EXECUTE_READWRITE;
 		mutable DWORD dwOriginalRegionBytes_[2] = { 0 };
