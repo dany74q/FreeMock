@@ -15,7 +15,7 @@ namespace freemock {
 
 		void mock() const {
 			if (!mocked) {
-				handle_jump_talbe();
+				handle_jump_table();
 				add_write_region_protection();
 				save_old_function_memory();
 				patch_memory_region();
@@ -43,7 +43,7 @@ namespace freemock {
 			*(reinterpret_cast<unsigned*>(f1_) + 1) = dwOriginalRegionBytes_[1];
 		}
 
-		void handle_jump_talbe() const noexcept {
+		void handle_jump_table() const noexcept {
 			if (*reinterpret_cast<unsigned char*>(f1_) == 0xe9) {
 				auto relativeJump = *reinterpret_cast<unsigned*>(reinterpret_cast<unsigned char*>(f1_) + 1);
 				auto finalAddress = reinterpret_cast<int>(f1_) + relativeJump + 5;
