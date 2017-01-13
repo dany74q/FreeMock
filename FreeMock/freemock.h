@@ -33,48 +33,87 @@ namespace freemock {
 
 
 	private:
+		static inline void* get_address_offsetted(void* const ptr, const size_t offset) {
+			return (reinterpret_cast<unsigned char*>(ptr) + offset);
+		}
+
+		template<class T>
+		static inline T get_value_from_address(void* const ptr) {
+			return *reinterpret_cast<T*>(ptr);
+		}
+
+		template<class T>
+		static inline void set_value_to_address(void* const ptr, const T value) {
+			*(reinterpret_cast<T*>(ptr)) = value;
+		}
+
+		template<class T>
+		static inline T get_value_from_address_offsetted(void* const ptr, const size_t offset) {
+			return get_value_from_address<T>(get_address_offsetted(ptr, offset));
+		}
+
 		void restore_region_protection() const noexcept {
 			DWORD dwDummy = 0;
-			VirtualProtect(f1_, 8, dwOldProtect_, &dwDummy);
+			VirtualProtect(f1_, sizeof(dwOriginalRegionBytes_), dwOldProtect_, &dwDummy);
 		}
 
 		void restore_function_memory() const noexcept {
-			*reinterpret_cast<unsigned*>(f1_) = dwOriginalRegionBytes_[0];
-			*(reinterpret_cast<unsigned*>(f1_) + 1) = dwOriginalRegionBytes_[1];
+			for (auto i = 0u; i < DWORDBlocksToSave; ++i)
+			{
+			*(reinterpret_cast<unsigned*>(f1_) + i) = dwOriginalRegionBytes_[i];
+			}
 		}
 
 		void handle_jump_table() const noexcept {
-			if (*reinterpret_cast<unsigned char*>(f1_) == 0xe9) {
-				auto relativeJump = *reinterpret_cast<unsigned*>(reinterpret_cast<unsigned char*>(f1_) + 1);
-				auto finalAddress = reinterpret_cast<int>(f1_) + relativeJump + 5;
-				f1_ = *reinterpret_cast<Func1*>(&finalAddress);
+			static const unsigned char RelativeJumpIndicator = 0xe9;
+			if (get_value_from_address<unsigned char>(f1_) == RelativeJumpIndicator) {
+				auto relativeJump = get_value_from_address_offsetted<unsigned>(f1_, 1);
+				auto finalAddress = get_address_offsetted(f1_, relativeJump + 5);
+				f1_ = get_value_from_address<Func1>(&finalAddress);
 			}
 		}
 
 		void add_write_region_protection() const {
-			if (!VirtualProtect(f1_, 8, dwNewProtect_, &dwOldProtect_)) {
+			if (!VirtualProtect(f1_, sizeof(dwOriginalRegionBytes_), dwNewProtect_, &dwOldProtect_)) {
 				throw std::runtime_error{ "Failed to change region protection" };
 			}
 		}
 
 		void save_old_function_memory() const noexcept {
-			dwOriginalRegionBytes_[0] = *reinterpret_cast<unsigned*>(f1_);
-			dwOriginalRegionBytes_[1] = *(reinterpret_cast<unsigned*>(f1_) + 1);
+			for (auto i = 0u; i < DWORDBlocksToSave; ++i)
+			{
+			dwOriginalRegionBytes_[i] = get_value_from_address_offsetted<DWORD>(f1_, sizeof(DWORD)*i);
+			}
 		}
 
 		void patch_memory_region() const noexcept {
-			// Mov eax, funcptr
-			*(reinterpret_cast<unsigned char*>(f1_)) = 0xb8;
-			*(reinterpret_cast<unsigned*>(reinterpret_cast<unsigned char*>(f1_) + 1)) = *reinterpret_cast<unsigned*>(f2_);
-			// JMP eax
-			*(reinterpret_cast<unsigned short*>(reinterpret_cast<unsigned char*>(f1_) + 5)) = 0xe0ff;
+			// x86: mov eax, funcptr
+			// x64: mov rax, funcptr
+#ifdef _WIN64
+			uint16_t movOpcode = 0xb848;
+#else
+			uint8_t movOpcode = 0xb8;
+#endif
+			set_value_to_address(f1_, movOpcode);
+			set_value_to_address(get_address_offsetted(f1_, sizeof(movOpcode)), get_value_from_address<uintptr_t>(f2_));
+			const size_t TotalSizeMov = sizeof(movOpcode) + sizeof(uintptr_t); // opcode + address
+			// x86: jmp eax
+			// x64: jmp rax
+			const uint16_t jmpOpcode = 0xe0ff;
+			set_value_to_address(get_address_offsetted(f1_, TotalSizeMov), jmpOpcode);
 		}
 	private:
 		mutable Func1 f1_;
 		Func2 f2_;
 		mutable DWORD dwOldProtect_ = PAGE_EXECUTE_READ;
 		mutable DWORD dwNewProtect_ = PAGE_EXECUTE_READWRITE;
-		mutable DWORD dwOriginalRegionBytes_[2] = { 0 };
+
+#ifdef _WIN64
+		static const unsigned int DWORDBlocksToSave = 3u;
+#else
+		static const unsigned int DWORDBlocksToSave = 2u;
+#endif
+		mutable DWORD dwOriginalRegionBytes_[DWORDBlocksToSave] = { 0 };
 		mutable bool mocked = false;
 	};
 
@@ -82,7 +121,7 @@ namespace freemock {
 	auto make_mock(Func1 f1, Func2 f2, std::enable_if_t<std::is_function<std::remove_pointer_t<Func2>>::value, void*> = 0) {
 		return FreeMocker<Func1, decltype(&f2)>(f1, &f2);
 	}
-	
+
 	namespace traits {
 		template <class T>
 		struct LambdaWrapper : public LambdaWrapper<decltype(&T::operator())> {};
