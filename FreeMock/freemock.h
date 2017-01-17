@@ -60,14 +60,14 @@ namespace freemock {
 		void restore_function_memory() const noexcept {
 			for (auto i = 0u; i < DWORDBlocksToSave; ++i)
 			{
-			*(reinterpret_cast<unsigned*>(f1_) + i) = dwOriginalRegionBytes_[i];
+				*(reinterpret_cast<unsigned*>(f1_) + i) = dwOriginalRegionBytes_[i];
 			}
 		}
 
 		void handle_jump_table() const noexcept {
 			static const unsigned char RelativeJumpIndicator = 0xe9;
 			if (get_value_from_address<unsigned char>(f1_) == RelativeJumpIndicator) {
-				auto relativeJump = get_value_from_address_offsetted<unsigned>(f1_, 1);
+				auto relativeJump = get_value_from_address_offsetted<int>(f1_, 1);
 				auto finalAddress = get_address_offsetted(f1_, relativeJump + 5);
 				f1_ = get_value_from_address<Func1>(&finalAddress);
 			}
@@ -82,7 +82,7 @@ namespace freemock {
 		void save_old_function_memory() const noexcept {
 			for (auto i = 0u; i < DWORDBlocksToSave; ++i)
 			{
-			dwOriginalRegionBytes_[i] = get_value_from_address_offsetted<DWORD>(f1_, sizeof(DWORD)*i);
+				dwOriginalRegionBytes_[i] = get_value_from_address_offsetted<DWORD>(f1_, sizeof(DWORD)*i);
 			}
 		}
 
